@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>대안 신용평가 시뮬레이터</title>
+  
+  <!-- React & ReactDOM CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Babel CDN (JSX 변환용) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    /* 기본 여백 제거 및 배경색 설정 */
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #0D0D0D;
+    }
+  </style>
+</head>
+<body>
+  <!-- React 앱이 렌더링될 최상위 요소 -->
+  <div id="root"></div>
+
+  <!-- React 코드 작성 영역 -->
+  <script type="text/babel">
+    const { useState } = React;
+
+    const COLORS = {
+      bg: "#0D0D0D",
+      card: "#1A1A1A",
+      cardHover: "#222222",
+      blue: "#3182F6",
+      blueDim: "#1B4B99",
+      green: "#34C759",
+      red: "#FF4D4F",
+      amber: "#F5A623",
+      textPrimary: "#FFFFFF",
+      textSecondary: "#8E8E93",
+      textTertiary: "#636366",
+      border: "#2C2C2E",
+      inputBg: "#2C2C2E",
+    };
+
+    function ScoreGauge({ score, maxScore = 900 }) {
+      const pct = Math.min(score / maxScore, 1);
+      const color = score >= 550 ? COLORS.green : score >= 400 ? COLORS.amber : COLORS.red;
+      const grade = score >= 550 ? "A (우량)" : score >= 450 ? "B (양호)" : score >= 350 ? "C (보통)" : "D (주의)";
+      const circumference = 2 * Math.PI * 80;
+      const offset = circumference * (1 - pct * 0.75);
+
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <svg width="200" height="170" viewBox="0 0 200 170">
+            <path d="M 30 150 A 80 80 0 1 1 170 150" fill="none" stroke={COLORS.border} strokeWidth="12" strokeLinecap="round" />
+            <path d="M 30 150 A 80 80 0 1 1 170 150" fill="none" stroke={color} strokeWidth="12" strokeLinecap="round"
+              strokeDasharray={circumference * 0.75}
+              strokeDashoffset={offset}
+              style={{ transition: "stroke-dashoffset 1s ease, stroke 0.5s ease" }} />
+            <text x="100" y="95" textAnchor="middle" fill={COLORS.textPrimary} fontSize="42" fontWeight="700" fontFamily="'Pretendard', sans-serif">{score}</text>
+            <text x="100" y="120" textAnchor="middle" fill={color} fontSize="14" fontWeight="500">{grade}</text>
+          </svg>
+        </div>
+      );
+    }
+
+    function CompareBar({ label, kcb, alt }) {
+      const maxVal = 900;
+      return (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>{label}</span>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: COLORS.textTertiary, width: 36, textAlign: "right" }}>KCB</span>
+            <div style={{ flex: 1, height: 8, background: COLORS.inputBg, borderRadius: 4, overflow: "hidden" }}>
+              <div style={{ width: `${(kcb / maxVal) * 100}%`, height: "100%", background: COLORS.textTertiary, borderRadius: 4, transition: "width 0.8s ease" }} />
+            </div>
+            <span style={{ fontSize: 12, color: COLORS.textTertiary, width: 32 }}>{kcb}</span>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>
+            <span style={{ fontSize: 11, color: COLORS.blue, width: 36, textAlign: "right" }}>ALT</span>
+            <div style={{ flex: 1, height: 8, background: COLORS.inputBg, borderRadius: 4, overflow: "hidden" }}>
+              <div style={{ width: `${(alt / maxVal) * 100}%`, height: "100%", background: COLORS.blue, borderRadius: 4, transition: "width 0.8s ease" }} />
+            </div>
+            <span style={{ fontSize: 12, color: COLORS.blue, width: 32, fontWeight: 600 }}>{alt}</span>
+          </div>
+        </div>
+      );
+    }
+
+    function TossSimulator() {
+      const [step, setStep] = useState(0);
+      const [form, setForm] = useState({
+        income: 250,
+        history: 0,
+        telecom: 100,
+        utilityLate: 0,
+        savings: 50,
+        obTx: 40,
+      });
+      const [result, setResult] = useState(null);
+
+      const labels = {
+        income: { label: "월 소득 (만원)", min: 0, max: 800, step: 10, icon: "💰" },
+        history: { label: "금융 이력 (개월)", min: 0, max: 60, step: 1, icon: "📅" },
+        telecom: { label: "통신비 납부율 (%)", min: 0, max: 100, step: 5, icon: "📱" },
+        utilityLate: { label: "공과금 연체 횟수", min: 0, max: 10, step: 1, icon: "⚡" },
+        savings: { label: "월 저축액 (만원)", min: 0, max: 300, step: 5, icon: "🏦" },
+        obTx: { label: "월 거래 건수", min: 0, max: 100, step: 1, icon: "📊" },
+      };
+
+      function calculate() {
+        const { income, history, telecom, utilityLate, savings, obTx } = form;
+        const kcb = history === 0 ? Math.round(350 + income * 0.3) : Math.round(400 + history * 15 + income * 0.5);
+        const alt = Math.round(income * 0.15 + telecom * 3 + (5 - Math.min(utilityLate, 5)) * 20 + savings * 0.5 + obTx * 1.5 + history * 5);
+        const kcbGrade = kcb >= 700 ? "A" : kcb >= 600 ? "B" : kcb >= 500 ? "C" : "D";
+        const altGrade = alt >= 550 ? "A" : alt >= 450 ? "B" : alt >= 350 ? "C" : "D";
+        const kcbLoan = kcb >= 600;
+        const altLoan = alt >= 400;
+        const kcbRate = kcbLoan ? (kcb >= 700 ? 4.5 : 8.5) : null;
+        const altRate = altLoan ? (alt >= 550 ? 4.2 : alt >= 450 ? 6.8 : 9.5) : null;
+        setResult({ kcb, alt, kcbGrade, altGrade, kcbLoan, altLoan, kcbRate, altRate });
+        setStep(2);
+      }
+
+      return (
+        <div style={{ minHeight: "100vh", background: COLORS.bg, color: COLORS.textPrimary, fontFamily: "'Pretendard', -apple-system, sans-serif", padding: "20px 16px" }}>
+          <div style={{ maxWidth: 420, margin: "0 auto" }}>
+            <div style={{ textAlign: "center", marginBottom: 32 }}>
+              <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>toss</div>
+              <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>대안 신용평가 시뮬레이터</div>
+            </div>
+
+            {step === 0 && (
+              <div style={{ animation: "fadeIn 0.4s ease" }}>
+                <div style={{ background: COLORS.card, borderRadius: 20, padding: "32px 24px", textAlign: "center" }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>🔓</div>
+                  <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>내 신용점수 미리 확인하기</h2>
+                  <p style={{ fontSize: 14, color: COLORS.textSecondary, lineHeight: 1.6, marginBottom: 24 }}>
+                    금융 이력이 없어도 괜찮아요.<br/>통신비, 공과금, 저축 패턴으로<br/>나의 진짜 신용도를 확인해보세요.
+                  </p>
+                  <button onClick={() => setStep(1)} style={{
+                    width: "100%", padding: "16px", background: COLORS.blue, color: "#fff", border: "none",
+                    borderRadius: 14, fontSize: 16, fontWeight: 600, cursor: "pointer",
+                  }}>
+                    시작하기
+                  </button>
+                </div>
+                <div style={{ marginTop: 16, padding: "16px 20px", background: COLORS.card, borderRadius: 14 }}>
+                  <div style={{ fontSize: 12, color: COLORS.textTertiary, lineHeight: 1.5 }}>
+                    ※ 이 시뮬레이터는 MIS 수업 프로젝트용 프로토타입입니다. 실제 신용평가와 다를 수 있습니다.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {step === 1 && (
+              <div style={{ animation: "fadeIn 0.4s ease" }}>
+                <div style={{ background: COLORS.card, borderRadius: 20, padding: "24px 20px" }}>
+                  <h3 style={{ fontSize: 17, fontWeight: 600, marginBottom: 20 }}>내 정보 입력</h3>
+                  {Object.entries(labels).map(([key, { label, min, max, step: s, icon }]) => (
+                    <div key={key} style={{ marginBottom: 20 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <label style={{ fontSize: 13, color: COLORS.textSecondary }}>{icon} {label}</label>
+                        <span style={{ fontSize: 15, fontWeight: 600, color: COLORS.blue }}>{form[key]}</span>
+                      </div>
+                      <input type="range" min={min} max={max} step={s} value={form[key]}
+                        onChange={e => setForm({ ...form, [key]: Number(e.target.value) })}
+                        style={{ width: "100%", accentColor: COLORS.blue, height: 6 }}
+                      />
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: COLORS.textTertiary, marginTop: 2 }}>
+                        <span>{min}</span><span>{max}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={calculate} style={{
+                  width: "100%", padding: "16px", background: COLORS.blue, color: "#fff", border: "none",
+                  borderRadius: 14, fontSize: 16, fontWeight: 600, cursor: "pointer", marginTop: 16,
+                }}>
+                  신용점수 확인하기
+                </button>
+              </div>
+            )}
+
+            {step === 2 && result && (
+              <div style={{ animation: "fadeIn 0.4s ease" }}>
+                <div style={{ background: COLORS.card, borderRadius: 20, padding: "28px 20px", marginBottom: 12 }}>
+                  <div style={{ textAlign: "center", marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, color: COLORS.textSecondary }}>나의 대안 신용점수</span>
+                  </div>
+                  <ScoreGauge score={result.alt} />
+                </div>
+
+                <div style={{ background: COLORS.card, borderRadius: 20, padding: "20px", marginBottom: 12 }}>
+                  <h4 style={{ fontSize: 14, color: COLORS.textSecondary, marginBottom: 16 }}>기존 vs 대안 비교</h4>
+                  <CompareBar label="신용점수" kcb={result.kcb} alt={result.alt} />
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 8 }}>
+                    <div style={{ background: COLORS.inputBg, borderRadius: 12, padding: "16px", textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: COLORS.textTertiary, marginBottom: 4 }}>기존 대출 가능</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: result.kcbLoan ? COLORS.green : COLORS.red }}>
+                        {result.kcbLoan ? "O" : "X"}
+                      </div>
+                      {result.kcbRate && <div style={{ fontSize: 11, color: COLORS.textTertiary, marginTop: 4 }}>금리 {result.kcbRate}%</div>}
+                    </div>
+                    <div style={{ background: COLORS.inputBg, borderRadius: 12, padding: "16px", textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: COLORS.blue, marginBottom: 4 }}>대안 대출 가능</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: result.altLoan ? COLORS.green : COLORS.red }}>
+                        {result.altLoan ? "O" : "X"}
+                      </div>
+                      {result.altRate && <div style={{ fontSize: 11, color: COLORS.textTertiary, marginTop: 4 }}>금리 {result.altRate}%</div>}
+                    </div>
+                  </div>
+                </div>
+
+                {!result.kcbLoan && result.altLoan && (
+                  <div style={{
+                    background: "linear-gradient(135deg, #1B4B99, #3182F6)", borderRadius: 16,
+                    padding: "20px", marginBottom: 12, textAlign: "center",
+                  }}>
+                    <div style={{ fontSize: 20, marginBottom: 8 }}>🎉</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>대안 모델에서 대출이 가능합니다!</div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+                      기존 방식에서는 불가능했지만, 통신비·공과금·저축 패턴을 반영한 결과 우량 고객으로 판별되었습니다.
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <button onClick={() => { setStep(1); setResult(null); }} style={{
+                    padding: "14px", background: COLORS.inputBg, color: COLORS.textPrimary, border: "none",
+                    borderRadius: 14, fontSize: 14, fontWeight: 500, cursor: "pointer",
+                  }}>
+                    다시 입력
+                  </button>
+                  <button onClick={() => { setStep(0); setResult(null); setForm({ income: 250, history: 0, telecom: 100, utilityLate: 0, savings: 50, obTx: 40 }); }} style={{
+                    padding: "14px", background: COLORS.blue, color: "#fff", border: "none",
+                    borderRadius: 14, fontSize: 14, fontWeight: 500, cursor: "pointer",
+                  }}>
+                    처음으로
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // 렌더링
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<TossSimulator />);
+  </script>
+
+  <!-- 글로벌 CSS 및 애니메이션 -->
+  <style>
+    @keyframes fadeIn { 
+      from { opacity: 0; transform: translateY(12px); } 
+      to { opacity: 1; transform: translateY(0); } 
+    }
+    input[type="range"] { 
+      -webkit-appearance: none; 
+      background: #2C2C2E; 
+      border-radius: 3px; 
+    }
+    input[type="range"]::-webkit-slider-thumb { 
+      -webkit-appearance: none; 
+      width: 20px; 
+      height: 20px; 
+      background: #3182F6; 
+      border-radius: 50%; 
+      cursor: pointer; 
+    }
+  </style>
+</body>
+</html>
